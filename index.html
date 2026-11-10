@@ -1,0 +1,891 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Train the robot's eyes</title>
+<style>
+  :root {
+    --ink: #16202B;
+    --muted: #46525F;
+    --teal: #0F766E;
+    --teal-dark: #0B5A54;
+    --amber: #F59E0B;
+    --card: #F1F3F5;
+    --line: #C9D0D6;
+    --white: #FFFFFF;
+    --good-bg: #E3F4EA;
+    --good: #166534;
+    --bad-bg: #FBE4E4;
+    --bad: #991B1B;
+  }
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--white);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 18px;
+    line-height: 1.45;
+    transition: background-color 0.25s ease;
+  }
+  body.state-1 { background: var(--good-bg); }
+  body.state-2 { background: var(--bad-bg); }
+  [hidden] { display: none !important; }
+  .wrap { max-width: 1240px; margin: 0 auto; padding: 16px 20px 28px; }
+  header h1 { margin: 0 0 2px; font-size: 2rem; line-height: 1.15; }
+  header p { margin: 0; color: var(--muted); font-size: 1.1rem; }
+
+  ol.steps {
+    list-style: none; margin: 14px 0 16px; padding: 0;
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  }
+  ol.steps li {
+    background: var(--card); border: 2px solid transparent; border-radius: 10px;
+    padding: 8px 10px; display: flex; align-items: center; gap: 10px;
+    font-weight: 600; font-size: 1rem; color: var(--muted);
+  }
+  ol.steps li .num {
+    flex: none; width: 30px; height: 30px; border-radius: 50%;
+    background: var(--white); border: 2px solid var(--line);
+    display: grid; place-items: center; font-size: 0.95rem;
+  }
+  ol.steps li.done .num { background: var(--teal); border-color: var(--teal); color: var(--white); }
+  ol.steps li.current { background: var(--white); border-color: var(--amber); color: var(--ink); }
+  ol.steps li.current .num { background: var(--amber); border-color: var(--amber); color: var(--ink); }
+
+  .layout { display: grid; grid-template-columns: minmax(300px, 400px) minmax(0, 1fr); gap: 20px; align-items: start; }
+  .left { position: sticky; top: 12px; }
+  .panel { background: var(--card); border-radius: 14px; padding: 16px; margin-bottom: 16px; }
+  .panel h2 { margin: 0 0 10px; font-size: 1.25rem; }
+  .panel h2 .tag { color: var(--teal); }
+
+  .videobox {
+    position: relative; width: 100%; aspect-ratio: 4 / 3; background: #0d141b;
+    border-radius: 10px; overflow: hidden; margin-bottom: 12px;
+  }
+  video { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); display: block; }
+  .videobox .placeholder {
+    position: absolute; inset: 0; display: grid; place-items: center; text-align: center;
+    color: #E5EAEE; padding: 16px; font-size: 1rem;
+  }
+
+  button, .btn {
+    font: inherit; font-weight: 700; min-height: 48px; padding: 10px 18px;
+    border-radius: 10px; border: 2px solid var(--teal); background: var(--teal);
+    color: var(--white); cursor: pointer;
+  }
+  button:hover:not(:disabled) { background: var(--teal-dark); border-color: var(--teal-dark); }
+  button:disabled { background: #D3D9DE; border-color: #D3D9DE; color: #4B5762; cursor: not-allowed; }
+  button.secondary { background: var(--white); color: var(--teal-dark); }
+  button.secondary:hover:not(:disabled) { background: #E6F2F1; color: var(--teal-dark); border-color: var(--teal); }
+  button.small { min-height: 44px; padding: 8px 12px; font-size: 0.95rem; }
+  :focus-visible { outline: 3px solid var(--ink); outline-offset: 3px; box-shadow: 0 0 0 6px var(--amber); }
+
+  .status { margin: 8px 0 0; font-size: 1rem; color: var(--muted); min-height: 1.5em; }
+  .status strong { color: var(--ink); }
+  .demo-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+
+  .cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .card { background: var(--white); border-radius: 12px; padding: 12px; border-top: 8px solid var(--line); }
+  .card.c0 { border-top-color: #7B8794; }
+  .card.c1 { border-top-color: var(--good); }
+  .card.c2 { border-top-color: var(--bad); }
+  .card h3 { margin: 0 0 8px; font-size: 1.1rem; }
+  .hold {
+    width: 100%; min-height: 72px; font-size: 1.05rem; touch-action: none;
+    user-select: none; -webkit-user-select: none; -webkit-touch-callout: none;
+  }
+  .hold.active { background: var(--amber); border-color: var(--amber); color: var(--ink); }
+  .count { margin: 8px 0 6px; font-size: 1rem; }
+  .count b { font-size: 1.6rem; }
+  .thumbs { display: flex; flex-wrap: wrap; gap: 4px; min-height: 44px; }
+  .thumbs canvas { width: 44px; height: 44px; border-radius: 4px; background: var(--card); }
+  .hint { margin: 12px 0 0; color: var(--muted); font-size: 1rem; }
+  .progress-note { margin: 6px 0 0; font-size: 1rem; }
+
+  .banner {
+    border-radius: 12px; padding: 14px 16px; background: var(--white);
+    border-left: 12px solid #7B8794;
+  }
+  .banner.s1 { border-left-color: var(--good); }
+  .banner.s2 { border-left-color: var(--bad); }
+  .banner .label { font-size: 2.2rem; font-weight: 800; line-height: 1.15; }
+  .bar { height: 18px; background: var(--card); border: 1px solid var(--line); border-radius: 9px; overflow: hidden; margin: 10px 0 4px; }
+  .bar > i { display: block; height: 100%; width: 0; background: var(--teal); transition: width 0.12s linear; }
+  .seeing { margin: 0; color: var(--muted); font-size: 1rem; }
+  .check { display: inline-flex; align-items: center; gap: 8px; margin-top: 12px; min-height: 44px; font-size: 1rem; cursor: pointer; }
+  .check input { width: 22px; height: 22px; }
+
+  .serial-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .serial-line { margin: 10px 0 0; font-size: 1rem; }
+  .serial-line b { color: var(--ink); }
+
+  .again-row { margin-top: 4px; }
+  footer { margin-top: 18px; color: var(--muted); font-size: 0.95rem; }
+
+  @media (max-width: 1000px) {
+    .layout { grid-template-columns: 1fr; }
+    .left { position: static; }
+    .videobox { max-width: 520px; }
+  }
+  @media (max-width: 700px) {
+    body { font-size: 17px; }
+    .wrap { padding: 12px 12px 24px; }
+    header h1 { font-size: 1.6rem; }
+    ol.steps { grid-template-columns: 1fr 1fr; }
+    .cards { grid-template-columns: 1fr; }
+    .banner .label { font-size: 1.7rem; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    body, .bar > i { transition: none; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Train the robot's eyes</h1>
+    <p>Your camera is the robot's eyes. You teach it. Then it moves the arm.</p>
+  </header>
+
+  <ol class="steps" id="steps" aria-label="Steps">
+    <li data-step="1"><span class="num">1</span><span>Allow the camera</span></li>
+    <li data-step="2"><span class="num">2</span><span>Teach it</span></li>
+    <li data-step="3"><span class="num">3</span><span>Test it</span></li>
+    <li data-step="4"><span class="num">4</span><span>Move the arm</span></li>
+  </ol>
+
+  <div class="layout">
+    <div class="left">
+      <section class="panel" aria-labelledby="h1">
+        <h2 id="h1"><span class="tag">Step 1.</span> Allow the camera</h2>
+        <div class="videobox">
+          <video id="video" playsinline muted autoplay></video>
+          <div class="placeholder" id="placeholder">The camera picture will appear here.</div>
+        </div>
+        <button id="startCam" type="button">Start camera</button>
+        <p class="status" id="status" role="status" aria-live="polite">Getting the robot's eyes ready.</p>
+        <div class="demo-bar" id="demoBar" hidden>
+          <button type="button" class="small secondary" data-scene="0">Scene: empty</button>
+          <button type="button" class="small secondary" data-scene="1">Scene: good</button>
+          <button type="button" class="small secondary" data-scene="2">Scene: faulty</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="right">
+      <section class="panel" aria-labelledby="h2">
+        <h2 id="h2"><span class="tag">Step 2.</span> Teach it</h2>
+        <div class="cards" id="cards"></div>
+        <p class="hint">Aim for 30 or more examples per class. Move the object around a little.</p>
+        <p class="progress-note" id="progressNote">Add at least 15 examples to every card to unlock the test.</p>
+      </section>
+
+      <section class="panel" id="testPanel" aria-labelledby="h3" hidden>
+        <h2 id="h3"><span class="tag">Step 3.</span> Test it</h2>
+        <div class="banner" id="banner" aria-live="polite">
+          <div class="label" id="bannerLabel">Looking.</div>
+        </div>
+        <div class="bar" role="progressbar" aria-label="How sure the robot is" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="barWrap"><i id="barFill"></i></div>
+        <p class="seeing" id="seeing">Hold an object in front of the camera.</p>
+        <label class="check"><input type="checkbox" id="sound"> Sound</label>
+      </section>
+
+      <section class="panel" id="armPanel" aria-labelledby="h4" hidden>
+        <h2 id="h4"><span class="tag">Step 4.</span> Move the arm</h2>
+        <div class="serial-row">
+          <button id="connectBtn" type="button">Connect the station</button>
+          <button id="disconnectBtn" type="button" class="secondary small" hidden>Disconnect</button>
+        </div>
+        <p id="noSerial" hidden><strong>The station needs Chrome or Edge on a laptop. Your AI still works on screen.</strong></p>
+        <p class="serial-line">Station: <b id="serialStatus">Not connected</b> <span id="serialNote"></span></p>
+        <p class="serial-line">Last command sent: <b id="lastCmd">none yet</b></p>
+      </section>
+
+      <div class="again-row">
+        <button id="againBtn" type="button" class="secondary">Start again</button>
+      </div>
+    </div>
+  </div>
+
+  <footer>Camera images stay in this browser. Nothing is uploaded.</footer>
+</div>
+<noscript><p style="padding:16px">This page needs JavaScript to work.</p></noscript>
+
+<script>
+(function () {
+  'use strict';
+
+  /* ---------- settings ---------- */
+  var params = new URLSearchParams(location.search);
+  var DEMO = params.get('demo') === '1';
+  var MOCK = params.get('mockserial') === '1';
+  var FORCE_BASIC = params.get('basic') === '1';
+
+  var LABELS = ['Nothing there', 'Good product', 'Faulty product'];
+  var CODES = ['N', 'G', 'F'];
+  var MIN_EXAMPLES = 15;
+  var LOAD_TIMEOUT_MS = 20000;
+  var PREDICT_EVERY_MS = 150;
+  var CAPTURE_EVERY_MS = 125;      /* about 8 frames per second */
+  var NEED_IN_A_ROW = 5;
+  var NEED_CONFIDENCE = 0.75;
+  var K = 5;
+
+  var URL_TF = 'https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js';
+  var URL_MOBILENET = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/mobilenet@2.1.1/dist/mobilenet.min.js';
+  var URL_KNN = 'https://cdn.jsdelivr.net/npm/@tensorflow-models/knn-classifier@1.2.2/dist/knn-classifier.min.js';
+
+  /* ---------- helpers ---------- */
+  function $(id) { return document.getElementById(id); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  var el = {
+    video: $('video'), placeholder: $('placeholder'), startCam: $('startCam'), status: $('status'),
+    demoBar: $('demoBar'), cards: $('cards'), progressNote: $('progressNote'),
+    testPanel: $('testPanel'), armPanel: $('armPanel'), banner: $('banner'), bannerLabel: $('bannerLabel'),
+    barFill: $('barFill'), barWrap: $('barWrap'), seeing: $('seeing'), sound: $('sound'),
+    connectBtn: $('connectBtn'), disconnectBtn: $('disconnectBtn'), noSerial: $('noSerial'),
+    serialStatus: $('serialStatus'), serialNote: $('serialNote'), lastCmd: $('lastCmd'),
+    againBtn: $('againBtn'), steps: $('steps')
+  };
+
+  /* ---------- public test hooks ---------- */
+  var resolveReady;
+  var readyPromise = new Promise(function (r) { resolveReady = r; });
+  var app = window.__app = {
+    mode: null,                 /* becomes "mobilenet" or "basic" once ready */
+    counts: [0, 0, 0],
+    state: null,
+    connected: false,
+    sent: [],
+    ready: readyPromise,
+    addExamples: addExamples,
+    setScene: setScene
+  };
+
+  /* ---------- classifier: basic mode (no libraries) ---------- */
+  var HUE_BINS = 24;
+  var smallCanvas = document.createElement('canvas');
+  smallCanvas.width = 16; smallCanvas.height = 16;
+  var smallCtx = smallCanvas.getContext('2d', { willReadFrequently: true });
+
+  function hsv(r, g, b) {
+    var mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn, h;
+    if (d === 0) return { h: 0, s: 0, v: mx };
+    if (mx === r) h = ((g - b) / d) % 6;
+    else if (mx === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+    return { h: h, s: d / mx, v: mx };
+  }
+
+  function basicFeature(frame) {
+    smallCtx.drawImage(frame, 0, 0, 16, 16);
+    var data = smallCtx.getImageData(0, 0, 16, 16).data;
+    var rgb = new Float32Array(16 * 16 * 3);
+    var hist = new Float32Array(HUE_BINS);
+    var i, p, r, g, b, c;
+    for (i = 0; i < 256; i++) {
+      p = i * 4;
+      r = data[p] / 255; g = data[p + 1] / 255; b = data[p + 2] / 255;
+      rgb[i * 3] = r; rgb[i * 3 + 1] = g; rgb[i * 3 + 2] = b;
+      c = hsv(r, g, b);
+      hist[Math.min(HUE_BINS - 1, Math.floor(c.h / (360 / HUE_BINS)))] += c.s * c.v;
+    }
+    normalise(rgb);
+    normalise(hist);
+    var out = new Float32Array(rgb.length + hist.length);
+    out.set(rgb, 0);
+    out.set(hist, rgb.length);
+    return out;
+  }
+
+  function normalise(v) {
+    var s = 0, i;
+    for (i = 0; i < v.length; i++) s += v[i] * v[i];
+    s = Math.sqrt(s);
+    if (s > 0) for (i = 0; i < v.length; i++) v[i] /= s;
+  }
+
+  function createBasicClassifier() {
+    var examples = [];
+    return {
+      name: 'basic',
+      addExample: function (classIndex, frame) {
+        examples.push({ f: basicFeature(frame), c: classIndex });
+      },
+      predict: function (frame) {
+        if (!examples.length) return Promise.resolve({ label: null, confidences: [0, 0, 0] });
+        var f = basicFeature(frame), list = [], i, j, d, t;
+        for (i = 0; i < examples.length; i++) {
+          d = 0;
+          var e = examples[i].f;
+          for (j = 0; j < f.length; j++) { t = f[j] - e[j]; d += t * t; }
+          list.push({ d: d, c: examples[i].c });
+        }
+        list.sort(function (a, b) { return a.d - b.d; });
+        var k = Math.min(K, list.length);
+        var votes = [0, 0, 0], nearest = [Infinity, Infinity, Infinity];
+        for (i = 0; i < k; i++) {
+          votes[list[i].c]++;
+          if (list[i].d < nearest[list[i].c]) nearest[list[i].c] = list[i].d;
+        }
+        var best = 0;
+        for (i = 1; i < 3; i++) {
+          if (votes[i] > votes[best] || (votes[i] === votes[best] && nearest[i] < nearest[best])) best = i;
+        }
+        return Promise.resolve({ label: best, confidences: votes.map(function (v) { return v / k; }) });
+      },
+      clear: function () { examples = []; }
+    };
+  }
+
+  /* ---------- classifier: MobileNet features + nearest neighbours ---------- */
+  function loadScript(url) {
+    return new Promise(function (resolve, reject) {
+      var s = document.createElement('script');
+      s.src = url; s.async = true;
+      s.onload = function () { resolve(); };
+      s.onerror = function () { reject(new Error('Could not load ' + url)); };
+      document.head.appendChild(s);
+    });
+  }
+
+  function loadMobilenetClassifier() {
+    return loadScript(URL_TF).then(function () {
+      return Promise.all([loadScript(URL_MOBILENET), loadScript(URL_KNN)]);
+    }).then(function () {
+      if (!window.tf || !window.mobilenet || !window.knnClassifier) throw new Error('Libraries missing');
+      return window.mobilenet.load({ version: 2, alpha: 0.5 });
+    }).then(function (net) {
+      var knn = window.knnClassifier.create();
+      window.tf.tidy(function () { net.infer(window.tf.zeros([224, 224, 3]), true); }); /* warm up */
+      return {
+        name: 'mobilenet',
+        addExample: function (classIndex, frame) {
+          var t = window.tf.tidy(function () { return net.infer(frame, true); });
+          knn.addExample(t, classIndex);
+          /* the neighbour store keeps this tensor and frees it in clearAllClasses, so it is not disposed here */
+        },
+        predict: function (frame) {
+          if (knn.getNumClasses() === 0) return Promise.resolve({ label: null, confidences: [0, 0, 0] });
+          var t = window.tf.tidy(function () { return net.infer(frame, true); });
+          return knn.predictClass(t, K).then(function (r) {
+            t.dispose();
+            var conf = [0, 1, 2].map(function (i) { return (r.confidences && r.confidences[i]) || 0; });
+            var label = Number(r.label);
+            return { label: isNaN(label) ? r.classIndex : label, confidences: conf };
+          }, function (err) { t.dispose(); throw err; });
+        },
+        clear: function () { knn.clearAllClasses(); }
+      };
+    });
+  }
+
+  var classifier = null;
+
+  function useBasic(why) {
+    classifier = createBasicClassifier();
+    app.mode = 'basic';
+    basicNote = true;
+    if (why) console.info('Basic mode: ' + why);
+    finishLoading();
+  }
+
+  var basicNote = false;
+  var loaded = false;
+
+  function finishLoading() {
+    loaded = true;
+    updateStatus();
+    updateButtons();
+    resolveReady();
+  }
+
+  function initClassifier() {
+    if (FORCE_BASIC) { useBasic('forced by the address'); return; }
+    var timedOut = false, timer;
+    var timeout = new Promise(function (_, reject) {
+      timer = setTimeout(function () { timedOut = true; reject(new Error('Loading took longer than 20 seconds')); }, LOAD_TIMEOUT_MS);
+    });
+    Promise.race([loadMobilenetClassifier(), timeout]).then(function (c) {
+      clearTimeout(timer);
+      if (timedOut) return;
+      classifier = c;
+      app.mode = 'mobilenet';
+      finishLoading();
+    }, function (err) {
+      clearTimeout(timer);
+      timedOut = true;
+      useBasic(String(err && err.message || err));
+    });
+  }
+
+  /* ---------- camera (real or demo) ---------- */
+  var camOn = false;
+  var resolveVideo;
+  var videoReady = new Promise(function (r) { resolveVideo = r; });
+  var captureCanvas = document.createElement('canvas');
+  captureCanvas.width = 224; captureCanvas.height = 224;
+  var captureCtx = captureCanvas.getContext('2d', { willReadFrequently: true });
+
+  var scene = 0;
+  var demoCanvas = null, demoCtx = null;
+
+  function shade(r, g, b, f) {
+    function c(x) { return Math.max(0, Math.min(255, Math.round(x * f))); }
+    return 'rgb(' + c(r) + ',' + c(g) + ',' + c(b) + ')';
+  }
+
+  function drawDemoFrame() {
+    var w = demoCanvas.width, h = demoCanvas.height, x = demoCtx;
+    var f = 1 + (Math.random() - 0.5) * 0.16;           /* brightness jitter */
+    var dx = (Math.random() - 0.5) * 24, dy = (Math.random() - 0.5) * 24;
+    x.fillStyle = shade(150, 154, 158, f);              /* the table */
+    x.fillRect(0, 0, w, h);
+    x.fillStyle = shade(128, 132, 137, f);
+    x.fillRect(0, 0, w, 70);                            /* the wall behind it */
+    if (scene === 1) {
+      x.fillStyle = shade(36, 160, 84, f);
+      x.fillRect(115 + dx, 85 + dy, 90, 90);
+      x.fillStyle = shade(70, 190, 112, f);
+      x.fillRect(115 + dx, 85 + dy, 90, 14);
+    } else if (scene === 2) {
+      x.fillStyle = shade(206, 48, 48, f);
+      x.fillRect(115 + dx, 85 + dy, 90, 90);
+      x.strokeStyle = shade(30, 18, 18, 1);
+      x.lineWidth = 4;
+      x.beginPath();
+      x.moveTo(135 + dx, 85 + dy);
+      x.lineTo(155 + dx, 115 + dy);
+      x.lineTo(145 + dx, 135 + dy);
+      x.lineTo(175 + dx, 175 + dy);
+      x.stroke();
+    }
+    for (var i = 0; i < 12; i++) {                       /* a little speckle */
+      x.fillStyle = 'rgba(0,0,0,0.04)';
+      x.fillRect(Math.random() * w, Math.random() * h, 3, 3);
+    }
+  }
+
+  function startDemoCamera() {
+    demoCanvas = document.createElement('canvas');
+    demoCanvas.width = 320; demoCanvas.height = 240;
+    demoCtx = demoCanvas.getContext('2d');
+    drawDemoFrame();
+    setInterval(drawDemoFrame, 66);
+    el.video.srcObject = demoCanvas.captureStream(15);
+    return el.video.play().catch(function () {});
+  }
+
+  function setScene(n) {
+    scene = (n === 1 || n === 2) ? n : 0;
+    if (demoCtx) drawDemoFrame();
+    /* the picture takes a moment to reach the video, so resolve after a short pause */
+    return sleep(300);
+  }
+
+  function startCamera() {
+    el.startCam.disabled = true;
+    setStatusMessage('Starting the camera.');
+    var p;
+    if (DEMO) {
+      p = startDemoCamera();
+    } else {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        el.startCam.disabled = false;
+        setStatusMessage('This browser cannot use the camera. Please use Chrome or Edge.');
+        return;
+      }
+      p = navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' }, audio: false
+      }).then(function (stream) {
+        el.video.srcObject = stream;
+        return el.video.play().catch(function () {});
+      });
+    }
+    p.then(function () {
+      var done = function () {
+        camOn = true;
+        el.placeholder.hidden = true;
+        el.startCam.textContent = 'Camera is on';
+        el.startCam.disabled = true;
+        setStatusMessage('');
+        resolveVideo();
+        updateStatus();
+        updateButtons();
+        renderSteps();
+      };
+      if (el.video.readyState >= 2 && el.video.videoWidth) done();
+      else el.video.addEventListener('loadeddata', done, { once: true });
+    }).catch(function () {
+      el.startCam.disabled = false;
+      setStatusMessage('The camera could not start. Check that you allowed it, then press Start camera again.');
+    });
+  }
+
+  function captureFrame() {
+    var vw = el.video.videoWidth, vh = el.video.videoHeight;
+    if (!vw || !vh) return null;
+    var s = Math.min(vw, vh);
+    captureCtx.drawImage(el.video, (vw - s) / 2, (vh - s) / 2, s, s, 0, 0, 224, 224);
+    var copy = document.createElement('canvas');
+    copy.width = 224; copy.height = 224;
+    copy.getContext('2d').drawImage(captureCanvas, 0, 0);
+    return copy;
+  }
+
+  /* ---------- status line ---------- */
+  var customMessage = '';
+  function setStatusMessage(m) { customMessage = m; updateStatus(); }
+  function updateStatus() {
+    var parts = [];
+    if (customMessage) parts.push(customMessage);
+    if (!loaded) parts.push('Getting the robot\'s eyes ready.');
+    else if (!customMessage && camOn) parts.push('The robot\'s eyes are ready.');
+    else if (!customMessage && !camOn) parts.push('Ready. Press Start camera.');
+    if (basicNote) parts.push('Basic mode');
+    el.status.textContent = parts.join(' ');
+  }
+
+  /* ---------- class cards ---------- */
+  var thumbs = [[], [], []];
+  var thumbBoxes = [], countEls = [], holdBtns = [];
+
+  function buildCards() {
+    LABELS.forEach(function (name, i) {
+      var card = document.createElement('div');
+      card.className = 'card c' + i;
+      card.innerHTML =
+        '<h3></h3>' +
+        '<button type="button" class="hold">Hold to add examples</button>' +
+        '<p class="count"><b>0</b> examples</p>' +
+        '<div class="thumbs" aria-hidden="true"></div>';
+      card.querySelector('h3').textContent = name;
+      el.cards.appendChild(card);
+      holdBtns[i] = card.querySelector('.hold');
+      countEls[i] = card.querySelector('.count b');
+      thumbBoxes[i] = card.querySelector('.thumbs');
+      wireHold(holdBtns[i], i);
+    });
+  }
+
+  function wireHold(btn, i) {
+    var timer = null;
+    function start() {
+      if (timer || btn.disabled) return;
+      btn.classList.add('active');
+      addOne(i);
+      timer = setInterval(function () { addOne(i); }, CAPTURE_EVERY_MS);
+    }
+    function stop() {
+      if (timer) { clearInterval(timer); timer = null; }
+      btn.classList.remove('active');
+    }
+    btn.addEventListener('pointerdown', function (e) {
+      e.preventDefault();
+      try { btn.setPointerCapture(e.pointerId); } catch (err) { /* not needed everywhere */ }
+      start();
+    });
+    ['pointerup', 'pointercancel', 'lostpointercapture', 'pointerleave'].forEach(function (n) {
+      btn.addEventListener(n, stop);
+    });
+    btn.addEventListener('blur', stop);
+    btn.addEventListener('contextmenu', function (e) { e.preventDefault(); });
+    btn.addEventListener('keydown', function (e) {
+      if ((e.key === ' ' || e.key === 'Enter') && !e.repeat) { e.preventDefault(); start(); }
+    });
+    btn.addEventListener('keyup', function (e) {
+      if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); stop(); }
+    });
+  }
+
+  function addOne(i) {
+    if (!classifier || !camOn) return false;
+    var frame = captureFrame();
+    if (!frame) return false;
+    classifier.addExample(i, frame);
+    app.counts[i]++;
+    var t = document.createElement('canvas');
+    t.width = 44; t.height = 44;
+    t.getContext('2d').drawImage(frame, 0, 0, 44, 44);
+    thumbs[i].push(t);
+    if (thumbs[i].length > 6) thumbs[i].shift();
+    renderCard(i);
+    checkUnlock();
+    return true;
+  }
+
+  function renderCard(i) {
+    countEls[i].textContent = app.counts[i];
+    thumbBoxes[i].innerHTML = '';
+    thumbs[i].forEach(function (c) { thumbBoxes[i].appendChild(c); });
+  }
+
+  function addExamples(classIndex, n) {
+    return Promise.all([readyPromise, videoReady]).then(function () {
+      var left = n;
+      return (function loop() {
+        if (left <= 0) return Promise.resolve();
+        left--;
+        addOne(classIndex);
+        return sleep(60).then(loop);
+      })();
+    });
+  }
+
+  function updateButtons() {
+    var ok = loaded && camOn;
+    holdBtns.forEach(function (b) { b.disabled = !ok; });
+  }
+
+  /* ---------- steps ---------- */
+  var testActive = false;
+
+  function checkUnlock() {
+    var all = app.counts.every(function (c) { return c >= MIN_EXAMPLES; });
+    if (all && !testActive) {
+      testActive = true;
+      el.testPanel.hidden = false;
+      el.armPanel.hidden = false;
+      scheduleNextPrediction();
+    }
+    var missing = [];
+    app.counts.forEach(function (c, i) {
+      if (c < MIN_EXAMPLES) missing.push(LABELS[i] + ' needs ' + (MIN_EXAMPLES - c) + ' more');
+    });
+    el.progressNote.textContent = testActive
+      ? 'Great. The test is open below. You can keep adding examples at any time.'
+      : 'Add at least ' + MIN_EXAMPLES + ' examples to every card to unlock the test. ' + missing.join('. ') + '.';
+    renderSteps();
+  }
+
+  function currentStep() {
+    if (!camOn) return 1;
+    if (!testActive) return 2;
+    if (!app.connected) return 3;
+    return 4;
+  }
+
+  function renderSteps() {
+    var cur = currentStep();
+    Array.prototype.forEach.call(el.steps.children, function (li) {
+      var n = Number(li.getAttribute('data-step'));
+      li.classList.toggle('current', n === cur);
+      li.classList.toggle('done', n < cur);
+      if (n === cur) li.setAttribute('aria-current', 'step'); else li.removeAttribute('aria-current');
+    });
+  }
+
+  /* ---------- decision loop ---------- */
+  var predicting = false;
+  var candidate = null, run = 0;
+
+  var predictTimer = null;
+  function scheduleNextPrediction() {
+    clearTimeout(predictTimer);
+    predictTimer = setTimeout(predictOnce, PREDICT_EVERY_MS);
+  }
+
+  function predictOnce() {
+    if (!testActive) return;
+    var frame = classifier && camOn ? captureFrame() : null;
+    if (!frame || predicting) { scheduleNextPrediction(); return; }
+    predicting = true;
+    classifier.predict(frame).then(function (res) {
+      predicting = false;
+      if (!testActive) return;
+      handlePrediction(res);
+      scheduleNextPrediction();
+    }, function () {
+      predicting = false;
+      scheduleNextPrediction();
+    });
+  }
+
+  function handlePrediction(res) {
+    var label = res.label;
+    var conf = label === null ? 0 : res.confidences[label];
+    el.barFill.style.width = Math.round(conf * 100) + '%';
+    el.barWrap.setAttribute('aria-valuenow', String(Math.round(conf * 100)));
+    el.seeing.textContent = label === null ? 'Hold an object in front of the camera.'
+      : 'Right now it sees: ' + LABELS[label] + ' (' + Math.round(conf * 100) + ' percent sure).';
+    if (label !== null && conf >= NEED_CONFIDENCE) {
+      if (label === candidate) run++; else { candidate = label; run = 1; }
+    } else {
+      candidate = null; run = 0;
+    }
+    if (run >= NEED_IN_A_ROW && candidate !== app.state) setState(candidate);
+  }
+
+  function setState(s) {
+    app.state = s;
+    document.body.classList.remove('state-0', 'state-1', 'state-2');
+    el.banner.classList.remove('s0', 's1', 's2');
+    if (s === null) {
+      el.bannerLabel.textContent = 'Looking.';
+    } else {
+      document.body.classList.add('state-' + s);
+      el.banner.classList.add('s' + s);
+      el.bannerLabel.textContent = LABELS[s];
+      if (s === 1) beep(880); else if (s === 2) beep(220);
+      sendState(s);
+    }
+  }
+
+  /* ---------- sound ---------- */
+  var audio = null;
+  function beep(freq) {
+    if (!el.sound.checked) return;
+    try {
+      audio = audio || new (window.AudioContext || window.webkitAudioContext)();
+      if (audio.state === 'suspended') audio.resume();
+      var o = audio.createOscillator(), g = audio.createGain();
+      o.type = 'sine'; o.frequency.value = freq;
+      g.gain.setValueAtTime(0.0001, audio.currentTime);
+      g.gain.exponentialRampToValueAtTime(0.25, audio.currentTime + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, audio.currentTime + 0.25);
+      o.connect(g); g.connect(audio.destination);
+      o.start(); o.stop(audio.currentTime + 0.27);
+    } catch (e) { /* sound is optional */ }
+  }
+
+  /* ---------- serial (the sorting station) ---------- */
+  var port = null, writer = null, portReady = false, connecting = false;
+  var encoder = new TextEncoder();
+  var serialSupported = MOCK || ('serial' in navigator);
+
+  function makeMockPort() {
+    return {
+      open: function () { return Promise.resolve(); },
+      close: function () { return Promise.resolve(); },
+      writable: { getWriter: function () { return { write: function () { return Promise.resolve(); }, releaseLock: function () {} }; } }
+    };
+  }
+
+  function renderSerial() {
+    el.serialStatus.textContent = app.connected ? 'Connected' : 'Not connected';
+    el.connectBtn.hidden = app.connected;
+    el.disconnectBtn.hidden = !app.connected;
+    el.connectBtn.disabled = connecting;
+    renderSteps();
+  }
+
+  function sendState(s) {
+    if (app.connected && portReady) sendLine(CODES[s]);
+  }
+
+  function sendLine(ch) {
+    var line = ch + '\n';
+    app.sent.push(line);
+    el.lastCmd.textContent = ch + ' (' + LABELS[CODES.indexOf(ch)] + ')';
+    if (!writer) return;
+    try {
+      writer.write(encoder.encode(line)).catch(function () { handleDisconnect('The station stopped answering. Check the cable.'); });
+    } catch (e) {
+      handleDisconnect('The station stopped answering. Check the cable.');
+    }
+  }
+
+  function handleDisconnect(message) {
+    if (!port && !app.connected) return;
+    var p = port, w = writer;
+    port = null; writer = null; portReady = false;
+    app.connected = false;
+    try { if (w) w.releaseLock(); } catch (e) { /* already released */ }
+    try { if (p) p.close().catch(function () {}); } catch (e) { /* already closed */ }
+    el.serialNote.textContent = message || '';
+    renderSerial();
+  }
+
+  function connect() {
+    if (app.connected || connecting) return;
+    connecting = true;
+    el.serialNote.textContent = '';
+    renderSerial();
+    var chosen = MOCK ? Promise.resolve(makeMockPort()) : navigator.serial.requestPort();
+    chosen.then(function (p) {
+      port = p;
+      return p.open({ baudRate: 115200 });
+    }).then(function () {
+      writer = port.writable.getWriter();
+      portReady = false;
+      app.connected = true;
+      el.serialNote.textContent = 'Waking the station.';
+      renderSerial();
+      return sleep(MOCK ? 100 : 2000);
+    }).then(function () {
+      if (!app.connected) return;
+      portReady = true;
+      el.serialNote.textContent = '';
+      sendLine(CODES[app.state === null ? 0 : app.state]);
+    }).catch(function (err) {
+      var cancelled = err && err.name === 'NotFoundError';
+      var msg = cancelled ? 'No station was chosen.'
+        : 'The station would not open. Close any other program that uses it, such as the Arduino Serial Monitor, then try again.';
+      if (port) handleDisconnect(msg);
+      else { el.serialNote.textContent = msg; }
+    }).then(function () {
+      connecting = false;
+      renderSerial();
+    });
+  }
+
+  if (!serialSupported) {
+    el.connectBtn.hidden = true;
+    el.noSerial.hidden = false;
+  } else if (navigator.serial && navigator.serial.addEventListener) {
+    navigator.serial.addEventListener('disconnect', function (e) {
+      if (port && e.target === port) handleDisconnect('The station was unplugged.');
+    });
+  }
+  app.mockUnplug = function () { handleDisconnect('The station was unplugged.'); };
+
+  /* ---------- start again ---------- */
+  function startAgain() {
+    if (!window.confirm('Start again? This removes every example you added.')) return;
+    if (classifier) classifier.clear();
+    app.counts = [0, 0, 0];
+    thumbs = [[], [], []];
+    for (var i = 0; i < 3; i++) renderCard(i);
+    testActive = false;
+    candidate = null; run = 0;
+    el.testPanel.hidden = true;
+    el.armPanel.hidden = true;
+    el.barFill.style.width = '0%';
+    el.seeing.textContent = 'Hold an object in front of the camera.';
+    app.state = null;
+    document.body.classList.remove('state-0', 'state-1', 'state-2');
+    el.banner.classList.remove('s0', 's1', 's2');
+    el.bannerLabel.textContent = 'Looking.';
+    if (app.connected && portReady) sendLine('N');   /* let the arm rest in the middle */
+    checkUnlock();
+  }
+
+  /* ---------- wire up ---------- */
+  buildCards();
+  el.startCam.addEventListener('click', startCamera);
+  el.connectBtn.addEventListener('click', connect);
+  el.disconnectBtn.addEventListener('click', function () { handleDisconnect('Disconnected.'); });
+  el.againBtn.addEventListener('click', startAgain);
+  if (DEMO) {
+    el.demoBar.hidden = false;
+    Array.prototype.forEach.call(el.demoBar.querySelectorAll('button'), function (b) {
+      b.addEventListener('click', function () { setScene(Number(b.getAttribute('data-scene'))); });
+    });
+  }
+  updateStatus();
+  updateButtons();
+  renderSerial();
+  renderSteps();
+  checkUnlock();
+  initClassifier();
+  if (DEMO) startCamera();     /* no camera permission is needed in demo mode */
+})();
+</script>
+</body>
+</html>
